@@ -1,4 +1,4 @@
-name: Cross-compile omxplayer for ARMv6
+name: Cross-build omxplayer for ARMv6
 
 on:
   workflow_dispatch:
@@ -8,38 +8,46 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y git build-essential cmake crossbuild-essential-armhf \
-            libboost-dev libpcre3-dev libcrossguid-dev libudev-dev \
-            libasound2-dev libdrm-dev libfreetype6-dev libfontconfig1-dev \
-            libssl-dev libcurl4-openssl-dev ruby ruby-dev
-          sudo gem install --no-document fpm
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Clone and build userland
-        run: |
-          git clone https://github.com/raspberrypi/userland
-          cd userland
-          ./buildme
-          cd ..
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-      - name: Clone and build omxplayer
+      - name: Build inside ARMv6 container
         run: |
-          git clone https://github.com/popcornmix/omxplayer
-          cd omxplayer
-          export VC_PATH=/opt/vc
-          export LD_LIBRARY_PATH=$VC_PATH/lib
-          make -j2 ARCH=armv6l
+          docker run --rm --platform linux/arm/v6 -v ${{ github.workspace }}:/workspace -w /workspace debian:bullseye bash -c "
+            set -e
 
-      - name: Package .deb
-        run: |
-          mkdir -p deb/usr/bin
-          cp omxplayer/omxplayer.bin deb/usr/bin/omxplayer
-          fpm -s dir -t deb -n omxplayer -v 0.3.7 --prefix=/ -C deb .
+            apt update
+            apt install -y git build-essential cmake crossbuild-essential-armhf \
+              libboost-dev libpcre3-dev libcrossguid-dev libudev-dev \
+              libasound2-dev libdrm-dev libfreetype6-dev libfontconfig1-dev \
+              libssl-dev libcurl4-openssl-dev ruby ruby-dev
 
-      - name: Upload artifact
+            gem install --no-document fpm
+
+            # Сборка userland
+            git clone https://github.com/raspberrypi/userland
+            cd userland
+            ./buildme
+            cd ..
+
+            # Сборка omxplayer
+            git clone https://github.com/popcornmix/omxplayer
+            cd omxplayer
+            export VC_PATH=/opt/vc
+            export LD_LIBRARY_PATH=\$VC_PATH/lib
+            make -j2 CC=arm-linux-gnueabihf-gcc CXX=arm-linux-gnueabihf-g++
+
+            # Создание .deb
+            mkdir -p deb/usr/bin
+            cp omxplayer.bin deb/usr/bin/omxplayer
+            fpm -s dir -t deb -n omxplayer -v 0.3.7 --prefix=/ -C deb .
+          "
+
+      - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
         with:
-          name: omxplayer-armv6
+          name: omxplayer-armv6-deb
           path: "*.deb"
