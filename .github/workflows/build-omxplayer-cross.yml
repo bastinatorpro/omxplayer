@@ -52,7 +52,8 @@ jobs:
             cd omxplayer
 
             # Патч Makefile.include
-            sed -i '/ffmpeg_compiled\\/usr\\/local\\/include/d' Makefile.include
+            sed -i '/ffmpeg_compiled.*include/d' Makefile.include
+            echo '-I/usr/include/arm-linux-gnueabihf' >> Makefile.include
               
             export VC_PATH=/opt/vc
             export LD_LIBRARY_PATH=\$VC_PATH/lib
