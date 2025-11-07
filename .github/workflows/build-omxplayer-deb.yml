@@ -1,0 +1,51 @@
+name: Build omxplayer .deb for ARMv6
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU for ARM emulation
+        uses: docker/setup-qemu-action@v3
+
+      - name: Run build in DockerPi (Raspbian ARMv6)
+        uses: addnab/docker-run-action@v3
+        with:
+          image: lukechilds/dockerpi:stretch
+          options: --platform linux/arm/v6
+          run: |
+            apt update
+            apt install -y git build-essential cmake fakeroot devscripts \
+                           libboost-dev libpcre3-dev libcrossguid-dev libudev-dev \
+                           libasound2-dev libdrm-dev libfreetype6-dev libfontconfig1-dev \
+                           libssl-dev libcurl4-openssl-dev
+
+            # Сборка userland
+            git clone https://github.com/raspberrypi/userland
+            cd userland
+            ./buildme
+            cd ..
+
+            # Сборка omxplayer
+            git clone https://github.com/popcornmix/omxplayer
+            cd omxplayer
+            export VC_PATH=/opt/vc
+            export LD_LIBRARY_PATH=$VC_PATH/lib
+            make -j2
+
+            # Создание .deb
+            mkdir -p deb/usr/bin
+            cp omxplayer.bin deb/usr/bin/omxplayer
+            fpm -s dir -t deb -n omxplayer -v 0.3.7 --prefix=/ usr/bin/omxplayer
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: omxplayer-armv6-deb
+          path: omxplayer/*.deb
