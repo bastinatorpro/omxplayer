@@ -50,8 +50,12 @@ jobs:
               git clone https://github.com/popcornmix/omxplayer
               cd omxplayer
 
+              # Удаляем устаревший путь и добавляем правильный
               sed -i '/ffmpeg_compiled.*include/d' Makefile.include
               echo '-I/usr/include/arm-linux-gnueabihf' >> Makefile.include
+
+              # Проверка наличия channel_layout.h
+              test -f /usr/include/arm-linux-gnueabihf/libavutil/channel_layout.h || (echo 'FFmpeg headers missing!' && exit 1)
 
               export VC_PATH=/opt/vc
               export LD_LIBRARY_PATH=\$VC_PATH/lib
