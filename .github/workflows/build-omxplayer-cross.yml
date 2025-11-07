@@ -1,0 +1,45 @@
+name: Cross-compile omxplayer for ARMv6
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git build-essential cmake crossbuild-essential-armhf \
+            libboost-dev libpcre3-dev libcrossguid-dev libudev-dev \
+            libasound2-dev libdrm-dev libfreetype6-dev libfontconfig1-dev \
+            libssl-dev libcurl4-openssl-dev ruby ruby-dev
+          sudo gem install --no-document fpm
+
+      - name: Clone and build userland
+        run: |
+          git clone https://github.com/raspberrypi/userland
+          cd userland
+          ./buildme
+          cd ..
+
+      - name: Clone and build omxplayer
+        run: |
+          git clone https://github.com/popcornmix/omxplayer
+          cd omxplayer
+          export VC_PATH=/opt/vc
+          export LD_LIBRARY_PATH=$VC_PATH/lib
+          make -j2 ARCH=armv6l
+
+      - name: Package .deb
+        run: |
+          mkdir -p deb/usr/bin
+          cp omxplayer/omxplayer.bin deb/usr/bin/omxplayer
+          fpm -s dir -t deb -n omxplayer -v 0.3.7 --prefix=/ -C deb .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: omxplayer-armv6
+          path: "*.deb"
