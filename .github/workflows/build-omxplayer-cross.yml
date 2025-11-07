@@ -1,4 +1,4 @@
-name: Cross-build omxplayer for ARMv6
+name: Build omxplayer for ARMv6 with host-side userland
 
 on:
   workflow_dispatch:
@@ -11,63 +11,60 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Restore cached userland
         uses: actions/cache@v3
         with:
-          path: userland/opt
+          path: opt
           key: userland-opt-v1
-          
-      - name: Build inside ARMv6 container
-        run: |
-          docker run --rm --platform linux/arm/v6 -v ${{ github.workspace }}:/workspace -w /workspace balenalib/rpi-debian:bullseye bash -c "
-            set -e
-            set -x
 
-            apt update
-            apt install -y git build-essential cmake crossbuild-essential-armhf \
-              libboost-dev libpcre3-dev libcrossguid-dev libudev-dev \
-              libasound2-dev libdrm-dev libfreetype6-dev libfontconfig1-dev \
-              libssl-dev libcurl4-openssl-dev ruby ruby-dev \
+      - name: Build userland on host
+        run: |
+          if [ ! -f opt/vc/lib/libWFC.so ]; then
+            git clone https://github.com/raspberrypi/userland
+            cd userland
+            ./buildme
+            mkdir -p ../opt
+            cp -r opt/* ../opt/
+          fi
+
+      - name: Build omxplayer inside ARMv6 container
+        run: |
+          docker run --rm --platform linux/arm/v6 \
+            -v ${{ github.workspace }}:/workspace \
+            -v ${{ github.workspace }}/opt:/opt \
+            -w /workspace \
+            balenalib/rpi-debian:bullseye bash -c "
+              set -e
+              set -x
+
+              apt update
+              apt install -y git build-essential cmake crossbuild-essential-armhf \
+                libboost-dev libpcre3-dev libcrossguid-dev libudev-dev \
+                libasound2-dev libdrm-dev libfreetype6-dev libfontconfig1-dev \
+                libssl-dev libcurl4-openssl-dev ruby ruby-dev \
                 ffmpeg libavcodec-dev libavformat-dev libavutil-dev \
                 libswscale-dev libswresample-dev libavfilter-dev
 
-            gem install --no-document fpm
+              gem install --no-document fpm
 
-              # Сборка userland (только если /opt/vc/lib/libWFC.so отсутствует)
-              if [ ! -f userland/opt/vc/lib/libWFC.so ]; then
-                git clone https://github.com/raspberrypi/userland
-                cd userland
-                ./buildme
-                cd ..
-              fi
+              git clone https://github.com/popcornmix/omxplayer
+              cd omxplayer
 
-            # Подключение userland
-              cp -r userland/opt /opt
-            
-            # Сборка omxplayer
-            git clone https://github.com/popcornmix/omxplayer
-            cd omxplayer
+              sed -i '/ffmpeg_compiled.*include/d' Makefile.include
+              echo '-I/usr/include/arm-linux-gnueabihf' >> Makefile.include
 
-            # Патч Makefile.include
-            sed -i '/ffmpeg_compiled.*include/d' Makefile.include
-            echo '-I/usr/include/arm-linux-gnueabihf' >> Makefile.include
-              
-            export VC_PATH=/opt/vc
-            export LD_LIBRARY_PATH=\$VC_PATH/lib
-            make -j2 CC=arm-linux-gnueabihf-gcc CXX=arm-linux-gnueabihf-g++
+              export VC_PATH=/opt/vc
+              export LD_LIBRARY_PATH=\$VC_PATH/lib
+              make -j2 CC=arm-linux-gnueabihf-gcc CXX=arm-linux-gnueabihf-g++
 
-            # Создание .deb
-            mkdir -p deb/usr/bin
-            cp omxplayer.bin deb/usr/bin/omxplayer
-            fpm -s dir -t deb -n omxplayer -v 0.3.7 --architecture armhf --prefix=/ -C deb .
-            mv *.deb /workspace/
-          "
+              mkdir -p deb/usr/bin
+              cp omxplayer.bin deb/usr/bin/omxplayer
+              fpm -s dir -t deb -n omxplayer -v 0.3.7 --architecture armhf --prefix=/ -C deb .
+              mv *.deb /workspace/
+            "
 
       - name: Upload .deb artifact
         uses: actions/upload-artifact@v4
         with:
           name: omxplayer-armv6-deb
-          path: "*.deb"
+          path: omxplayer_*.deb
