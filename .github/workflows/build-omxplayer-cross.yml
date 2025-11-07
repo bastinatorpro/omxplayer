@@ -18,12 +18,15 @@ jobs:
         run: |
           docker run --rm --platform linux/arm/v6 -v ${{ github.workspace }}:/workspace -w /workspace balenalib/rpi-debian:bullseye bash -c "
             set -e
+            set -x
 
             apt update
             apt install -y git build-essential cmake crossbuild-essential-armhf \
               libboost-dev libpcre3-dev libcrossguid-dev libudev-dev \
               libasound2-dev libdrm-dev libfreetype6-dev libfontconfig1-dev \
-              libssl-dev libcurl4-openssl-dev ruby ruby-dev
+              libssl-dev libcurl4-openssl-dev ruby ruby-dev \
+                ffmpeg libavcodec-dev libavformat-dev libavutil-dev \
+                libswscale-dev libswresample-dev libavfilter-dev
 
             gem install --no-document fpm
 
