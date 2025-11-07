@@ -1,0 +1,38 @@
+name: Build OMXPlayer for ARMv6
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bullseye
+
+    steps:
+      - name: Install dependencies
+        run: |
+          apt update
+          apt install -y git build-essential cmake libboost-dev libpcre3-dev libcrossguid-dev \
+                         libudev-dev libasound2-dev libdrm-dev libfreetype6-dev libfontconfig1-dev \
+                         libssl-dev libcurl4-openssl-dev
+
+      - name: Clone userland
+        run: |
+          git clone https://github.com/raspberrypi/userland
+          cd userland
+          ./buildme
+
+      - name: Clone omxplayer
+        run: |
+          git clone https://github.com/popcornmix/omxplayer
+          cd omxplayer
+          export VC_PATH=/opt/vc
+          export LD_LIBRARY_PATH=$VC_PATH/lib
+          make -j2
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: omxplayer-bin
+          path: omxplayer/omxplayer.bin
